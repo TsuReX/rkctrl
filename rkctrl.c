@@ -156,13 +156,37 @@ int32_t write_register(int32_t fd, uint16_t reg_addr, uint32_t reg_value) {
     return 0;
 }
 
+int32_t i2c_write_word(int32_t fd, uint16_t word) {
+
+    struct i2c_rdwr_ioctl_data data;
+    struct i2c_msg messages[1];
+
+    messages[0].addr = 0x20;
+    messages[0].flags = 0; // Write operation (0 for write, I2C_M_RD for read)
+    messages[0].len = sizeof(word);
+    messages[0].buf = (uint8_t *)&word;
+
+    data.msgs = messages;
+    data.nmsgs = 1;
+
+    return ioctl(fd, I2C_RDWR, &data);
+}
+
 int32_t do_action(const char *const device_path, int32_t action) {
     printf("do_action: device_path: %s, action: %d\n", device_path, action);
     int32_t fd = -1;
     int32_t ret_val = open_i2c(device_path, &fd);
 
     printf("fd: %d\n", fd);
-
+    switch (action) {
+        case 0: // power on
+            ret_val = i2c_write_word(fd, 0x000B);
+            break;
+        case 1: // power off
+            ret_val = i2c_write_word(fd, 0);
+            break;
+    }
+    printf("ret_val: %d\n", ret_val);
     close(fd);
     return 0;
 }
