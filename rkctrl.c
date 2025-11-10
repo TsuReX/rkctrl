@@ -1,3 +1,4 @@
+#include <string.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -95,11 +96,11 @@ static int32_t i2c_smbus_write_block_data(int32_t file, uint8_t command, uint8_t
 
 //************************************************
 
-int32_t open_i2c(int32_t *fd) {
+int32_t open_i2c(const char * const device_path, int32_t * const fd) {
     char dev_file[] = "/dev/i2c-10";
     uint32_t smbus_addr = 0x10;
-    printf("SMBus device: %s, SMBus slave address: 0x%02X\n", dev_file, smbus_addr);
-    *fd = open(dev_file, O_RDWR);
+    printf("SMBus device: %s, SMBus slave address: 0x%02X\n", device_path, smbus_addr);
+    *fd = open(device_path, O_RDWR);
     if (*fd < 0) {
         perror("Function open() returned with error");
         return -1;
@@ -155,6 +156,17 @@ int32_t write_register(int32_t fd, uint16_t reg_addr, uint32_t reg_value) {
     return 0;
 }
 
+int32_t do_action(const char *const device_path, int32_t action) {
+    printf("do_action: device_path: %s, action: %d\n", device_path, action);
+    int32_t fd = -1;
+    int32_t ret_val = open_i2c(device_path, &fd);
+
+    printf("fd: %d\n", fd);
+
+    close(fd);
+    return 0;
+}
+
 int32_t main(int32_t argc, char* argv[]) {
     const char *opt_string = "h?";
 
@@ -165,10 +177,16 @@ int32_t main(int32_t argc, char* argv[]) {
         { "unlocksd", no_argument, NULL, 3 },
         { "reset", no_argument, NULL, 4 },
         { "sw", no_argument, NULL, 5 },
+        { "device", required_argument, NULL, 6 },
         { NULL, no_argument, NULL, 0 }
     };
+
     int32_t long_opt_ind = 0;
     int32_t opt_res = getopt_long(argc, (char * const*)argv, opt_string, long_opt, &long_opt_ind);
+    int32_t action = -1;
+    char *device_path = NULL;
+    int32_t ret_val = -1;
+
     while( opt_res != -1 ) {
         printf("opt_res %d\n", opt_res);
         switch( opt_res ) {
@@ -180,33 +198,53 @@ int32_t main(int32_t argc, char* argv[]) {
 
             case 0: /* pwron */
                 printf("Switch power on \n");
+                action = opt_res;
                 break;
 
             case 1: /* pwroff */
                 printf("Switch power off \n");
+                action = opt_res;
                 break;
 
             case 2: /* locksd */
                 printf("SD-card locked \n");
+                action = opt_res;
                 break;
 
             case 3: /* unlocksd */
                 printf("SD-card unlocked \n");
+                action = opt_res;
                 break;
 
             case 4: /* reset */
                 printf("Reset button pressed\n");
+                action = opt_res;
                 break;
 
             case 5: /* sw */
                 printf("Power button pressed\n");
+                action = opt_res;
                 break;
 
+            case 6: /* device */
+                printf("Device: %s\n", optarg);
+                device_path = malloc(strlen(optarg) + 1);
+                strcpy(device_path, optarg);
+                break;
             default:
                 printf("Unknown argument \'%c\'\n", opt_res);
                 break;
         }
+
+        if (action != -1 && device_path != NULL)
+            break;
+
         opt_res = getopt_long(argc, (char * const*)argv, opt_string, long_opt, &long_opt_ind);
     }
-    return 0;
+
+    if (action != -1 && device_path != NULL)
+        ret_val = do_action(device_path, action);
+
+    free(device_path);
+    return ret_val;
 }
