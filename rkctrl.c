@@ -172,6 +172,19 @@ int32_t i2c_write_word(int32_t fd, uint16_t word) {
     return ioctl(fd, I2C_RDWR, &data);
 }
 
+uint16_t get_last_word() {
+    int32_t fd = open("/tmp/rkctrl", O_CREAT | O_RDWR);
+    uint16_t word = 0x0;
+    read(fd, &word, sizeof(word));
+    close(fd);
+}
+
+void set_last_word(uint16_t word) {
+    int32_t fd = open("/tmp/rkctrl", O_CREAT | O_RDWR);
+    write(fd, &word, sizeof(word));
+    close(fd);
+}
+
 int32_t do_action(const char *const device_path, int32_t action) {
     printf("do_action: device_path: %s, action: %d\n", device_path, action);
     int32_t fd = -1;
@@ -180,10 +193,16 @@ int32_t do_action(const char *const device_path, int32_t action) {
     printf("fd: %d\n", fd);
     switch (action) {
         case 0: // power on
-            ret_val = i2c_write_word(fd, 0x000B);
+            uint16_t word = get_last_word();
+            if (word == 0)
+                word = 0x3;
+            word |= (1 << 3);
+            ret_val = i2c_write_word(fd, word);
+            set_last_word(word);
             break;
         case 1: // power off
             ret_val = i2c_write_word(fd, 0);
+            set_last_word(0);
             break;
     }
     printf("ret_val: %d\n", ret_val);
