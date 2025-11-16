@@ -12,90 +12,6 @@
 #include <unistd.h>
 #include <getopt.h>
 
-
-static int32_t i2c_smbus_access(int file, char read_write, uint8_t command, int32_t size, union i2c_smbus_data *data) {
-    struct i2c_smbus_ioctl_data args;
-
-    args.read_write = read_write;
-    args.command = command;
-    args.size = size;
-    args.data = data;
-    return ioctl(file, I2C_SMBUS, &args);
-}
-
-//************************************************
-
-static int32_t i2c_smbus_read_byte(int32_t file) {
-    union i2c_smbus_data data;
-    if (i2c_smbus_access(file, I2C_SMBUS_READ, 0, I2C_SMBUS_BYTE, &data))
-        return -1;
-    else
-        return 0x0FF & data.byte;
-}
-
-static int32_t i2c_smbus_read_byte_data(int32_t file, uint8_t command) {
-    union i2c_smbus_data data;
-    if (i2c_smbus_access(file, I2C_SMBUS_READ, command, I2C_SMBUS_BYTE_DATA, &data))
-        return -1;
-    else
-        return 0x0FF & data.byte;
-}
-
-static int32_t i2c_smbus_read_word_data(int32_t file, uint8_t command) {
-    union i2c_smbus_data data;
-    if (i2c_smbus_access(file, I2C_SMBUS_READ, command, I2C_SMBUS_WORD_DATA, &data))
-        return -1;
-    else
-        return 0x0FFFF & data.word;
-}
-
-static int32_t i2c_smbus_read_block_data(int32_t file, uint8_t command, uint8_t *values) {
-    union i2c_smbus_data data;
-    int32_t i;
-    if (i2c_smbus_access(file, I2C_SMBUS_READ, command, I2C_SMBUS_BLOCK_DATA, &data))
-        return -1;
-    else {
-        for (i = 1; i <= data.block[0]; i++)
-            values[i-1] = data.block[i];
-        return data.block[0];
-    }
-}
-
-//*************************************************
-
-static int32_t i2c_smbus_write_quick(int32_t file, uint8_t value) {
-    return i2c_smbus_access(file, value, 0, I2C_SMBUS_QUICK, NULL);
-}
-
-static int32_t i2c_smbus_write_byte(int32_t file, uint8_t value) {
-    return i2c_smbus_access(file, I2C_SMBUS_WRITE, value, I2C_SMBUS_BYTE,NULL);
-}
-
-static int32_t i2c_smbus_write_byte_data(int32_t file, uint8_t command, uint8_t value) {
-    union i2c_smbus_data data;
-    data.byte = value;
-    return i2c_smbus_access(file, I2C_SMBUS_WRITE, command, I2C_SMBUS_BYTE_DATA, &data);
-}
-
-static int32_t i2c_smbus_write_word_data(int32_t file, uint8_t command, uint16_t value) {
-    union i2c_smbus_data data;
-    data.word = value;
-    return i2c_smbus_access(file, I2C_SMBUS_WRITE, command, I2C_SMBUS_WORD_DATA, &data);
-}
-
-static int32_t i2c_smbus_write_block_data(int32_t file, uint8_t command, uint8_t length, const uint8_t *values) {
-    union i2c_smbus_data data;
-    int32_t i;
-    if (length > 32)
-        length = 32;
-    for (i = 1; i <= length; i++)
-        data.block[i] = values[i-1];
-    data.block[0] = length;
-    return i2c_smbus_access(file, I2C_SMBUS_WRITE, command, I2C_SMBUS_BLOCK_DATA, &data);
-}
-
-//************************************************
-
 int32_t open_i2c(const char * const device_path, int32_t * const fd) {
     char dev_file[] = "/dev/i2c-10";
     uint32_t smbus_addr = 0x10;
@@ -112,48 +28,6 @@ int32_t open_i2c(const char * const device_path, int32_t * const fd) {
         return -2;
     }
 	return 0;
-}
-
-int32_t read_register(int32_t fd, uint16_t reg_addr, uint32_t *preg_value) {
-    uint8_t buffer[32] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-
-    buffer[0] = reg_addr & 0xFF;
-    buffer[1] = reg_addr >> 8;
-    int32_t ret_val = i2c_smbus_write_block_data(fd, 0x02, 0x2, (uint8_t *)&buffer);
-//    printf("ret_val: %d\n", ret_val);
-    if (ret_val < 0) {
-        perror("Function ioctl() returned with error");
-        close(fd);
-        return -1;
-    }
-
-    ret_val = i2c_smbus_read_block_data(fd, 0x01, (uint8_t *)&buffer);
-//    printf("ret_val: %d\n", ret_val);
-    if (ret_val < 0) {
-        perror("Function ioctl() returned with error");
-        return -2;
-    }
-    *preg_value = buffer[5] << 24 | buffer[4] << 16 | buffer[3] << 8 | buffer[2];
-    return 0;
-}
-
-int32_t write_register(int32_t fd, uint16_t reg_addr, uint32_t reg_value) {
-    uint8_t buffer[32] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-
-    buffer[0] = reg_addr & 0xFF;
-    buffer[1] = reg_addr >> 8;
-    buffer[2] = (reg_value >> 0) & 0xFF;
-    buffer[3] = (reg_value >> 8) & 0xFF;
-    buffer[4] = (reg_value >> 16) & 0xFF;
-    buffer[5] = (reg_value >> 24) & 0xFF;
-    int32_t ret_val = i2c_smbus_write_block_data(fd, 0x07, 0x6, (uint8_t *)&buffer);
-//    printf("ret_val: %d\n", ret_val);
-    if (ret_val < 0) {
-        perror("Function ioctl() returned with error");
-        return -1;
-    }
-
-    return 0;
 }
 
 int32_t i2c_write_word(int32_t fd, uint16_t word) {
@@ -191,18 +65,71 @@ int32_t do_action(const char *const device_path, int32_t action) {
     int32_t ret_val = open_i2c(device_path, &fd);
 
     printf("fd: %d\n", fd);
+    uint16_t word = 0;
     switch (action) {
         case 0: // power on
-            uint16_t word = get_last_word();
+            word = get_last_word();
             if (word == 0)
                 word = 0x3;
             word |= (1 << 3);
             ret_val = i2c_write_word(fd, word);
             set_last_word(word);
             break;
+
         case 1: // power off
             ret_val = i2c_write_word(fd, 0);
             set_last_word(0);
+            break;
+
+        case 2: // lock sd
+            word = get_last_word();
+            if (word == 0)
+                break;
+            word |= (1 << 2);
+            ret_val = i2c_write_word(fd, word);
+            set_last_word(word);
+            break;
+
+        case 3: // unclock sd
+            word = get_last_word();
+            if (word == 0)
+                break;
+            word &= ~(1 << 2);
+            ret_val = i2c_write_word(fd, word);
+            set_last_word(word);
+            break;
+
+        case 4: // reset
+            word = get_last_word();
+            if (word == 0)
+                break;
+            word |= (1 << 1);
+            sleep(1);
+            word &= ~(1 << 1);
+            ret_val = i2c_write_word(fd, word);
+            set_last_word(word);
+            break;
+
+        case 5: // on
+            word = get_last_word();
+            if (word == 0)
+                break;
+            word |= (1 << 0);
+            sleep(1);
+            word &= ~(1 << 0);
+            ret_val = i2c_write_word(fd, word);
+            set_last_word(word);
+            break;
+
+        case 6: // off
+            word = get_last_word();
+            if (word == 0)
+                break;
+            word |= (1 << 0);
+            sleep(10);
+            word &= ~(1 << 0);
+            ret_val = i2c_write_word(fd, word);
+            set_last_word(word);
             break;
     }
     printf("ret_val: %d\n", ret_val);
@@ -219,8 +146,9 @@ int32_t main(int32_t argc, char* argv[]) {
         { "locksd", no_argument, NULL, 2 },
         { "unlocksd", no_argument, NULL, 3 },
         { "reset", no_argument, NULL, 4 },
-        { "sw", no_argument, NULL, 5 },
-        { "device", required_argument, NULL, 6 },
+        { "on", no_argument, NULL, 5 },
+        { "off", no_argument, NULL, 6 },
+        { "device", required_argument, NULL, 7 },
         { NULL, no_argument, NULL, 0 }
     };
 
@@ -264,12 +192,17 @@ int32_t main(int32_t argc, char* argv[]) {
                 action = opt_res;
                 break;
 
-            case 5: /* sw */
-                printf("Power button pressed\n");
+            case 5: /* on */
+                printf("Switched on\n");
                 action = opt_res;
                 break;
 
-            case 6: /* device */
+            case 6: /* off */
+                printf("Switched off\n");
+                action = opt_res;
+                break;
+
+            case 7: /* device */
                 printf("Device: %s\n", optarg);
                 device_path = malloc(strlen(optarg) + 1);
                 strcpy(device_path, optarg);
