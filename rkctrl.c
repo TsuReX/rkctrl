@@ -48,13 +48,18 @@ int32_t i2c_write_word(int32_t fd, uint16_t word) {
 
 uint16_t get_last_word() {
     int32_t fd = open("/tmp/rkctrl", O_CREAT | O_RDWR);
+    printf("get_last_word: fd: %d\n", fd);
     uint16_t word = 0x0;
     read(fd, &word, sizeof(word));
+    printf("get_last_word: word: %d\n", word);
     close(fd);
+    return word;
 }
 
 void set_last_word(uint16_t word) {
     int32_t fd = open("/tmp/rkctrl", O_CREAT | O_RDWR);
+    printf("set_last_word: fd: %d\n", fd);
+    printf("set_last_word: word: %d\n", word);
     write(fd, &word, sizeof(word));
     close(fd);
 }
@@ -104,6 +109,7 @@ int32_t do_action(const char *const device_path, int32_t action) {
             if (word == 0)
                 break;
             word |= (1 << 1);
+            ret_val = i2c_write_word(fd, word);
             sleep(1);
             word &= ~(1 << 1);
             ret_val = i2c_write_word(fd, word);
@@ -114,9 +120,10 @@ int32_t do_action(const char *const device_path, int32_t action) {
             word = get_last_word();
             if (word == 0)
                 break;
-            word |= (1 << 0);
-            sleep(1);
             word &= ~(1 << 0);
+            ret_val = i2c_write_word(fd, word);
+            sleep(1);
+            word |= (1 << 0);
             ret_val = i2c_write_word(fd, word);
             set_last_word(word);
             break;
@@ -125,9 +132,10 @@ int32_t do_action(const char *const device_path, int32_t action) {
             word = get_last_word();
             if (word == 0)
                 break;
-            word |= (1 << 0);
-            sleep(10);
             word &= ~(1 << 0);
+            ret_val = i2c_write_word(fd, word);
+            sleep(10);
+            word |= (1 << 0);
             ret_val = i2c_write_word(fd, word);
             set_last_word(word);
             break;
